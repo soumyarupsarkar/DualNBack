@@ -111,6 +111,11 @@ object ScalaJSFrontEnd {
               " for an overview of research related to the Dual N-Back task."
             ),
             p(
+              "View the source code (or file an issue) at ",
+              a(href:="https://github.com/soumyarupsarkar/DualNBack",rel:="noopener",color:=linkColor)("soumyarupsarkar/DualNBack"),
+              " on GitHub."
+            ),
+            p(
               "The sound files of letters of the alphabet are credited to Amy Gedgaudas and were distributed by Tim Kahn " +
               "on ", a(href:="https://freesound.org/people/tim.kahn/packs/4371/",rel:="noopener",color:=linkColor)("freesound"), " under ",
                 a(href:="https://creativecommons.org/licenses/by/3.0/",rel:="noopener",color:=linkColor)("CC BY 3.0"), "."
