@@ -15,87 +15,41 @@ object NBackGame {
   val possibleVisuals: Vector[Int] = (0 to 8).toVector.filterNot(_ == 4) // position going from left to right, top down
   val possibleAudio: Vector[Char] = "cghkpqtw".toVector
 
-  def randElemFromArray[A](xs: Vector[A]): State[Random, A] = State(r => (r, xs(r.nextInt(xs.length))))
   def shuffleSeq[A](xs: Seq[A]): State[Random, Seq[A]] = State(r => (r, r.shuffle(xs)))
-
-  def generateSignal(visuals: Vector[Int], audio: Vector[Char]): State[Random, Stimulus] =
-    for {
-      v <- randElemFromArray(visuals)
-      c <- randElemFromArray(audio)
-    } yield Stimulus(v, c)
-
-  def generateNonTargetSignals(numTrials: Int, nBackLevel: Int): State[Random, List[Stimulus]] = {
-    def go(acc: State[Random, List[Stimulus]]) = {
-      for {
-        lst <- acc
-        futureStimulus = lst.lift(nBackLevel - 1)
-        stimulus <- generateSignal(possibleVisuals.filterNot(x => futureStimulus.exists(_.visual == x)), possibleAudio.filterNot(x => futureStimulus.exists(_.audio == x)))
-      } yield stimulus :: lst
-    }
-    def go2(acc: State[Random, List[Stimulus]]): State[Random, List[Stimulus]] = acc.flatMap(lst => if (lst.size == numTrials) State.pure(lst) else go2(go(acc)))
-    val seed = generateSignal(possibleVisuals, possibleAudio).map(x => List(x))
-    go2(seed)
-  }
 
   // TODO: consider parameterizing the number of visual, audio, and dual targets
   def generateTargetPositions(numTrials: Int, nBackLevel: Int): State[Random, (Set[Int], Set[Int], Set[Int])] = {
-    val indexesNaway: Int => Set[Int] = x => Set(x, x + nBackLevel, x - nBackLevel)
-
-    val visualTargetPositions: State[Random, Set[Int]] =
-      shuffleSeq(nBackLevel until numTrials).map(_.slice(0, 4).toSet)
-
-    val audioTargetPositions: State[Random, Set[Int]] =
-      visualTargetPositions.flatMap((visPos: Set[Int]) =>
-        shuffleSeq(
-          (nBackLevel until numTrials)
-            .filterNot(visPos.flatMap(indexesNaway).contains)
-        ).map(_.slice(0, 4).toSet)
-      )
-
-    val dualTargetPositions: State[Random, Set[Int]] =
-      visualTargetPositions.flatMap{visPos =>
-        audioTargetPositions.flatMap{audioPos =>
-          shuffleSeq(
-            (nBackLevel until numTrials)
-              .filterNot(visPos.flatMap(indexesNaway).contains)
-              .filterNot(audioPos.flatMap(indexesNaway).contains)
-          ).map(_.slice(0, 2).toSet)
-        }
-      }
-
     for {
-      visPos <- visualTargetPositions
-      audioPos <- audioTargetPositions
-      dualPos <- dualTargetPositions
-    } yield (visPos, audioPos, dualPos)
-  }
-
-  def generateSignalsWithTargets(
-    nonTargetSignals: List[Stimulus],
-    visualTargetPositions: Set[Int],
-    audioTargetPositions: Set[Int],
-    dualTargetPositions: Set[Int],
-    nBackLevel: Int
-  ): Seq[Stimulus] = {
-    nonTargetSignals.indices.foldLeft(List.empty[Stimulus]){(acc, idx) =>
-      if (visualTargetPositions.contains(idx)) Stimulus(acc(nBackLevel-1).visual, nonTargetSignals(idx).audio) :: acc
-      else if (audioTargetPositions.contains(idx)) Stimulus(nonTargetSignals(idx).visual, acc(nBackLevel-1).audio) :: acc
-      else if (dualTargetPositions.contains(idx)) Stimulus(acc(nBackLevel-1).visual, acc(nBackLevel-1).audio) :: acc
-      else nonTargetSignals(idx) :: acc
-    }.reverse
+      shuffledPositions <- shuffleSeq(nBackLevel until numTrials)
+      visualTargetPositions = shuffledPositions.slice(0, 4).toSet
+      audioTargetPositions = shuffledPositions.slice(4, 8).toSet
+      dualTargetPositions = shuffledPositions.slice(8, 10).toSet
+    } yield (visualTargetPositions, audioTargetPositions, dualTargetPositions)
   }
 
   /**
     * Generate signals with targets placed at indexes in the (visual, audio, dual) tuple.
     */
   def generateSignalsAndTargets(numTrials: Int, nBackLevel: Int): State[Random, (Seq[Stimulus], (Set[Int], Set[Int], Set[Int]))] = {
-    generateNonTargetSignals(numTrials, nBackLevel)
-      .flatMap(nonTargetSignals =>
-        generateTargetPositions(numTrials, nBackLevel)
-          .map(targetPositions =>
-            generateSignalsWithTargets(nonTargetSignals, targetPositions._1, targetPositions._2, targetPositions._3, nBackLevel) -> targetPositions
-          )
-      )
+    // TODO: use the State's random
+    val rand = new Random()
+    def randElemFromArray[A](xs: Vector[A]): A = xs(rand.nextInt(xs.length))
+    def generateSignal(visuals: Vector[Int], audio: Vector[Char]): Stimulus =
+      Stimulus(randElemFromArray(visuals), randElemFromArray(audio))
+
+    val targetPositions = generateTargetPositions(numTrials, nBackLevel)
+    targetPositions.map { tPos =>
+      val (visPos, audioPos, dualPos) = tPos
+      (0 until numTrials).foldLeft(Vector.empty[Stimulus]) { (acc: Vector[Stimulus], i: Int) => acc :+
+        (
+          if (i < nBackLevel) generateSignal(possibleVisuals, possibleAudio)
+          else if (visPos.contains(i)) generateSignal(Vector(acc.reverse(nBackLevel-1).visual), possibleAudio.filterNot(_ == acc.reverse(nBackLevel-1).audio))
+          else if (audioPos.contains(i)) generateSignal(possibleVisuals.filterNot(_ == acc.reverse(nBackLevel-1).visual), Vector(acc.reverse(nBackLevel-1).audio))
+          else if (dualPos.contains(i)) generateSignal(Vector(acc.reverse(nBackLevel-1).visual), Vector(acc.reverse(nBackLevel-1).audio))
+          else generateSignal(possibleVisuals.filterNot(_ == acc.reverse(nBackLevel-1).visual), possibleAudio.filterNot(_ == acc.reverse(nBackLevel-1).audio))
+        )
+      } -> tPos
+    }
   }
 
   def countMistakes(
