@@ -15,7 +15,15 @@ object NBackGame {
   val possibleVisuals: Vector[Int] = (0 to 8).toVector.filterNot(_ == 4) // position going from left to right, top down
   val possibleAudio: Vector[Char] = "cghkpqtw".toVector
 
+
+  def randElemFromArray[A](xs: Vector[A]): State[Random, A] = State(r => (r, xs(r.nextInt(xs.length))))
   def shuffleSeq[A](xs: Seq[A]): State[Random, Seq[A]] = State(r => (r, r.shuffle(xs)))
+
+  def generateSignal(visuals: Vector[Int], audio: Vector[Char]): State[Random, Stimulus] =
+    for {
+      v <- randElemFromArray(visuals)
+      c <- randElemFromArray(audio)
+    } yield Stimulus(v, c)
 
   // TODO: consider parameterizing the number of visual, audio, and dual targets
   def generateTargetPositions(numTrials: Int, nBackLevel: Int): State[Random, (Set[Int], Set[Int], Set[Int])] = {
@@ -31,24 +39,18 @@ object NBackGame {
     * Generate signals with targets placed at indexes in the (visual, audio, dual) tuple.
     */
   def generateSignalsAndTargets(numTrials: Int, nBackLevel: Int): State[Random, (Seq[Stimulus], (Set[Int], Set[Int], Set[Int]))] = {
-    // TODO: use the State's random
-    val rand = new Random()
-    def randElemFromArray[A](xs: Vector[A]): A = xs(rand.nextInt(xs.length))
-    def generateSignal(visuals: Vector[Int], audio: Vector[Char]): Stimulus =
-      Stimulus(randElemFromArray(visuals), randElemFromArray(audio))
-
     val targetPositions = generateTargetPositions(numTrials, nBackLevel)
-    targetPositions.map { tPos =>
+    targetPositions.flatMap { tPos =>
       val (visPos, audioPos, dualPos) = tPos
-      (0 until numTrials).foldLeft(Vector.empty[Stimulus]) { (acc: Vector[Stimulus], i: Int) => acc :+
+      (0 until numTrials).toList.foldM[State[Random, ?], Vector[Stimulus]](Vector.empty[Stimulus]) { (acc: Vector[Stimulus], i: Int) =>
         (
           if (i < nBackLevel) generateSignal(possibleVisuals, possibleAudio)
           else if (visPos.contains(i)) generateSignal(Vector(acc.reverse(nBackLevel-1).visual), possibleAudio.filterNot(_ == acc.reverse(nBackLevel-1).audio))
           else if (audioPos.contains(i)) generateSignal(possibleVisuals.filterNot(_ == acc.reverse(nBackLevel-1).visual), Vector(acc.reverse(nBackLevel-1).audio))
           else if (dualPos.contains(i)) generateSignal(Vector(acc.reverse(nBackLevel-1).visual), Vector(acc.reverse(nBackLevel-1).audio))
           else generateSignal(possibleVisuals.filterNot(_ == acc.reverse(nBackLevel-1).visual), possibleAudio.filterNot(_ == acc.reverse(nBackLevel-1).audio))
-        )
-      } -> tPos
+        ).map(acc :+ _)
+      }.map(_ -> tPos)
     }
   }
 
