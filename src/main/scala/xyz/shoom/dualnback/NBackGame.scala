@@ -11,7 +11,7 @@ object NBackGame {
   final case class VisualMatchAttempt(idx: Int) extends MatchAttempt
   final case class AudioMatchAttempt(idx: Int) extends MatchAttempt
 
-  val possibleVisuals: Vector[Int] = (0 to 8).toVector // position going from left to right, top down
+  val possibleVisuals: Vector[Int] = (0 to 8).toVector.filterNot(_ == 4) // position going from left to right, top down
   val possibleAudio: Vector[Char] = "cghkpqtw".toVector
 
   def randElemFromArray[A](xs: Vector[A]): State[Random, A] = State(r => (r, xs(r.nextInt(xs.length))))
