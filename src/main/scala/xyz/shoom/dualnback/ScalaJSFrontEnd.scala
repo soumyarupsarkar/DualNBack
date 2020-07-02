@@ -126,6 +126,7 @@ object ScalaJSFrontEnd {
   }
 
   // retrying is necessary due to the behavior of generateSignalsAndTargets possibly returning unidentified/accidental dual matches
+  // TODO: this was insufficient but should no longer be necessary anyway. remove after adding tests that confirm there are no uncounted dual matches.
   @tailrec
   def generateGame(nBackLevel: Int): (Seq[Stimulus], (Set[Int], Set[Int], Set[Int])) = {
     val game = NBackGame.generateSignalsAndTargets(DNBConfig.numTrials(nBackLevel), nBackLevel).run(new Random()).value._2

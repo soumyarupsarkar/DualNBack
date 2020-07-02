@@ -1,6 +1,7 @@
 package xyz.shoom.dualnback
 
-import cats.data._, cats.implicits._
+import cats.data._
+import cats.implicits._
 
 import scala.util.Random
 
@@ -38,12 +39,35 @@ object NBackGame {
 
   // TODO: consider parameterizing the number of visual, audio, and dual targets
   def generateTargetPositions(numTrials: Int, nBackLevel: Int): State[Random, (Set[Int], Set[Int], Set[Int])] = {
+    val indexesNaway: Int => Set[Int] = x => Set(x, x + nBackLevel, x - nBackLevel)
+
+    val visualTargetPositions: State[Random, Set[Int]] =
+      shuffleSeq(nBackLevel until numTrials).map(_.slice(0, 4).toSet)
+
+    val audioTargetPositions: State[Random, Set[Int]] =
+      visualTargetPositions.flatMap((visPos: Set[Int]) =>
+        shuffleSeq(
+          (nBackLevel until numTrials)
+            .filterNot(visPos.flatMap(indexesNaway).contains)
+        ).map(_.slice(0, 4).toSet)
+      )
+
+    val dualTargetPositions: State[Random, Set[Int]] =
+      visualTargetPositions.flatMap{visPos =>
+        audioTargetPositions.flatMap{audioPos =>
+          shuffleSeq(
+            (nBackLevel until numTrials)
+              .filterNot(visPos.flatMap(indexesNaway).contains)
+              .filterNot(audioPos.flatMap(indexesNaway).contains)
+          ).map(_.slice(0, 2).toSet)
+        }
+      }
+
     for {
-      shuffledPositions <- shuffleSeq(nBackLevel until numTrials)
-      visualTargetPositions = shuffledPositions.slice(0, 4).toSet
-      audioTargetPositions = shuffledPositions.slice(4, 8).toSet
-      dualTargetPositions = shuffledPositions.slice(8, 10).toSet
-    } yield (visualTargetPositions, audioTargetPositions, dualTargetPositions)
+      visPos <- visualTargetPositions
+      audioPos <- audioTargetPositions
+      dualPos <- dualTargetPositions
+    } yield (visPos, audioPos, dualPos)
   }
 
   def generateSignalsWithTargets(
@@ -63,20 +87,6 @@ object NBackGame {
 
   /**
     * Generate signals with targets placed at indexes in the (visual, audio, dual) tuple.
-    *
-    * NOTE: there is a problem with this approach. We start with a game with no targets, then as we build up a new list,
-    * we insert targets. Here's what could go wrong: we could insert an audio match at position 7, changing it from (3,h)
-    * to (3,g), then if we insert a visual match at position 9, changing it from (7,g) to (3,g), we have just inserted
-    * a dual match. These are accidental, uncounted dual matches.
-    *
-    * For N=2, this happens for approximately 25% of all calls to this function:
-    * scala.collection.immutable.Stream.continually(generateSignalsAndTargets(22, 2).run(new Random()).value._2.some
-    * .map(xx => xx.some.exists(x => x._2._1.exists(y => x._1(y) == x._1(y-2))) || xx.some.exists(x => x._2._2
-    * .exists(y => x._1(y) == x._1(y-2))))).take(100000).toSeq.filter(_.contains(true)).size
-    *
-    * It happens less often at higher N (around 19% at N=8).
-    *
-    * TODO: properly fix this if possible
     */
   def generateSignalsAndTargets(numTrials: Int, nBackLevel: Int): State[Random, (Seq[Stimulus], (Set[Int], Set[Int], Set[Int]))] = {
     generateNonTargetSignals(numTrials, nBackLevel)
