@@ -121,7 +121,7 @@ object ScalaJSFrontEnd {
               " on GitHub."
             ),
             p(
-              "The Gedgaudas sound pack of letters of the alphabet is credited to Amy Gedgaudas and were distributed by Tim Kahn " +
+              "The Gedgaudas sound pack of letters of the alphabet is credited to Amy Gedgaudas and was distributed by Tim Kahn " +
               "on ", a(href:="https://freesound.org/people/tim.kahn/packs/4371/",rel:="noopener",color:=linkColor)("freesound"), " under ",
                 a(href:="https://creativecommons.org/licenses/by/3.0/",rel:="noopener",color:=linkColor)("CC BY 3.0"), "."
             )
