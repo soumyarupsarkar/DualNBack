@@ -3,7 +3,6 @@ package xyz.shoom.dualnback
 import cats.data._
 import cats.implicits._
 import org.scalajs.dom
-import org.scalajs.dom.html.Div
 import org.scalajs.dom.raw.{AudioContext, KeyboardEvent, MouseEvent, XMLHttpRequest}
 import org.scalajs.dom.{CanvasRenderingContext2D, Event, html}
 import scalatags.JsDom.all._
@@ -42,7 +41,8 @@ object ScalaJSFrontEnd {
 
     (nBackLevelOption, mistakesMadeOption) match {
       case (Some(nBackLevel), Some((visualMistakes, audioMistakes))) =>
-        dom.document.body.style = "font-size: 1.5rem; margin-top: 1.25rem; margin-left: 2rem; font-family: Helvetica Neue,Helvetica,sans-serif; line-height: 1.5;"
+        dom.document.body.style = "font-size: 1.5rem; margin-top: 1.25rem; margin-left: 2rem;" +
+          "font-family: Helvetica Neue,Helvetica,sans-serif; line-height: 1.5; touch-action: pan-y;"
         dom.document.body.style.backgroundColor = "#222233"
         dom.document.body.style.color = "#AACCFF"
         val recommendIncreasingN = visualMistakes < 3 && audioMistakes < 3
@@ -66,7 +66,9 @@ object ScalaJSFrontEnd {
         )
         appendNBackLevelSubmitBox(target)
       case (Some(nBackLevel), None) =>
-        dom.document.body.style = "margin-top: 0rem; margin-left: 0rem; margin-bottom: 0rem; overflow: hidden; position: fixed;"
+        dom.document.body.style = "font-size: 1.5rem; margin-top: 0rem; margin-left: 0rem; margin-bottom: 0rem; " +
+          "font-family: Helvetica Neue,Helvetica,sans-serif; line-height: 1.5; overflow: hidden; position: fixed; " +
+          "touch-action: none;"
         target.appendChild(canvas(id:="canvas").render)
         val audioContext = new AudioContext
         val gameCanvas = dom.document.getElementById("canvas") match { case c: html.Canvas => c }
@@ -79,14 +81,31 @@ object ScalaJSFrontEnd {
         println(s"Stimuli to be presented: ${stimuli.zipWithIndex}")
         println(s"Just-visual match indexes: ${visualMatchIdxs} | Just-audio match indexes: ${audioMatchIdxs} | Dual match indexes: ${dualMatchIdxs}")
 
-        gameCanvas.height = dom.document.documentElement.clientHeight
-        gameCanvas.width = dom.document.documentElement.clientWidth
-
-        clearGrid(gameCanvas, renderer)
+        val visualMatchButton =
+          input(
+            style := "display: inline-block; font-size: 3rem; padding: 10px 15px; border-radius: 0; border: 0px solid transparent;" +
+              "background-color: #DADEE0; float: left;",
+            `type` := "button",
+            value := "Visual match (A)"
+          ).render
+        val audioMatchButton =
+          input(
+            style := "display: inline-block; font-size: 3rem; padding: 10px 15px; border-radius: 0; border: 0px solid transparent;" +
+              "background-color: #DADEE0; float: right;",
+            `type` := "button",
+            value := "Audio match (L)"
+          ).render
+        val buttonRegion = div(backgroundColor := "#222233", visualMatchButton, audioMatchButton).render
+        target.appendChild(buttonRegion)
+        val buttonHeight = visualMatchButton.clientHeight
+        buttonRegion.style.height = buttonHeight + "px"
+        clearGrid(gameCanvas, renderer, buttonHeight)
         val matchAttempts = collection.mutable.Queue.empty[MatchAttempt]
-        renderStimuli(stimuli.toList, 0, nBackLevel, gameCanvas, audioContext, renderer, matchAttempts, visualMatchIdxs, audioMatchIdxs, dualMatchIdxs)
+        renderStimuli(stimuli.toList, 0, nBackLevel, gameCanvas, audioContext, renderer, visualMatchButton,
+          audioMatchButton, buttonHeight, matchAttempts, visualMatchIdxs, audioMatchIdxs, dualMatchIdxs)
       case _ =>
-        dom.document.body.style = "font-size: 1.5rem; margin-top: 1.25rem; margin-left: 2rem; font-family: Helvetica Neue,Helvetica,sans-serif; line-height: 1.5;"
+        dom.document.body.style = "font-size: 1.5rem; margin-top: 1.25rem; margin-left: 2rem; " +
+          "font-family: Helvetica Neue,Helvetica,sans-serif; line-height: 1.5; touch-action: pan-y;"
         dom.document.body.style.backgroundColor = "#222233"
         dom.document.body.style.color = "#AACCFF"
         target.appendChild(
@@ -99,8 +118,8 @@ object ScalaJSFrontEnd {
             p("For 20 + N trials, you will see a square on a 3x3 grid, and simultaneously you will hear a letter."),
             p(
               "At each trial:", br(),
-              "If the square is in the same position as it was N trials ago, press ", b("A"), " or click on the left side of the grid.", br(),
-              "If the letter you hear is the same letter you heard N trials ago, press ", b("L"), " or click on the right side of the grid."
+              "If the square is in the same position as it was N trials ago, press ", b("A"), ".", br(),
+              "If the letter you hear is the same letter you heard N trials ago, press ", b("L"), "."
             ),
             p("Note that both may be identical to what they were N trials ago."),
             p("Enter the level (the N in Dual N-Back) you would like to start at. We recommend starting at level 2.")
@@ -142,7 +161,7 @@ object ScalaJSFrontEnd {
     else game
   }
 
-  def appendNBackLevelSubmitBox(target: Div): Unit = {
+  def appendNBackLevelSubmitBox(target: html.Div): Unit = {
     val nBackLevelBox =
       input(
         style := "display: inline-block; padding: 10px 15px; border-radius: 0; border: 1px solid transparent;",
@@ -179,7 +198,7 @@ object ScalaJSFrontEnd {
     startButton.onclick = (e: MouseEvent) => redirectToGame()
   }
 
-  private def appendAudioPackButtons(target: Div): Unit = {
+  private def appendAudioPackButtons(target: html.Div): Unit = {
     val selectedAudioPack = getSelectedDnbAudioPackFromLocalStorage()
 
     val audioPackRadioButtons =
@@ -207,6 +226,9 @@ object ScalaJSFrontEnd {
     gameCanvas: html.Canvas,
     audioContext: AudioContext,
     renderer: dom.CanvasRenderingContext2D,
+    visualMatchButton: dom.html.Input,
+    audioMatchButton: dom.html.Input,
+    buttonHeight: Int,
     matchAttempts: collection.mutable.Queue[MatchAttempt],
     visualMatchIdxs: Set[Int],
     audioMatchIdxs: Set[Int],
@@ -221,20 +243,29 @@ object ScalaJSFrontEnd {
       gameCanvas.focus()
       gameCanvas.onkeypress = (e: dom.KeyboardEvent) => {
         e.key match {
-          case "a" => matchAttempts.enqueue(VisualMatchAttempt(idx))
-          case "l" => matchAttempts.enqueue(AudioMatchAttempt(idx))
+          case "a" => {
+            dom.experimental.Vibration.toVibration(dom.window.navigator).vibrate(20)
+            matchAttempts.enqueue(VisualMatchAttempt(idx))
+          }
+          case "l" => {
+            dom.experimental.Vibration.toVibration(dom.window.navigator).vibrate(20)
+            matchAttempts.enqueue(AudioMatchAttempt(idx))
+          }
           case _ => ()
         }
       }
-      gameCanvas.onclick = (e: dom.MouseEvent) => {
-        e.clientX match {
-          case x if x < gameCanvas.width / 2 => matchAttempts.enqueue(VisualMatchAttempt(idx))
-          case x if x > gameCanvas.width / 2 => matchAttempts.enqueue(AudioMatchAttempt(idx))
-        }
+      visualMatchButton.onclick = (e: dom.MouseEvent) => {
+        dom.experimental.Vibration.toVibration(dom.window.navigator).vibrate(20)
+        matchAttempts.enqueue(VisualMatchAttempt(idx))
       }
-      setTimeout(DNBConfig.stimulusLength)(clearGrid(gameCanvas, renderer))
+      audioMatchButton.onclick = (e: dom.MouseEvent) => {
+        dom.experimental.Vibration.toVibration(dom.window.navigator).vibrate(20)
+        matchAttempts.enqueue(AudioMatchAttempt(idx))
+      }
+      setTimeout(DNBConfig.stimulusLength)(clearGrid(gameCanvas, renderer, buttonHeight))
       setTimeout(DNBConfig.stimulusLength + DNBConfig.interstimulusInterval)(
-        renderStimuli(stimuli.drop(1), idx+1, nBackLevel, gameCanvas, audioContext, renderer, matchAttempts, visualMatchIdxs, audioMatchIdxs, dualMatchIdxs)
+        renderStimuli(stimuli.drop(1), idx+1, nBackLevel, gameCanvas, audioContext, renderer, visualMatchButton,
+          audioMatchButton, buttonHeight, matchAttempts, visualMatchIdxs, audioMatchIdxs, dualMatchIdxs)
       )
     } else {
       val matchAttemptSet = matchAttempts.toSet
@@ -283,7 +314,11 @@ object ScalaJSFrontEnd {
     renderer.fillRect((visualPosition % 3) * gameCanvas.width / 3.0, visualPosition / 3 * gameCanvas.height / 3.0, gameCanvas.width / 3.0, gameCanvas.height / 3.0)
   }
 
-  def clearGrid(gameCanvas: html.Canvas, renderer: dom.CanvasRenderingContext2D): Unit = {
+  def clearGrid(gameCanvas: html.Canvas, renderer: dom.CanvasRenderingContext2D, buttonHeight: Int): Unit = {
+    gameCanvas.style.display = "block"
+    gameCanvas.height = dom.document.documentElement.clientHeight - buttonHeight
+    gameCanvas.width = dom.document.documentElement.clientWidth
+
     renderer.clearRect(0, 0, gameCanvas.width.toDouble, gameCanvas.height.toDouble)
     renderer.fillStyle = "#000000"
     renderer.fillRect(0, 0, gameCanvas.width.toDouble, gameCanvas.height.toDouble)
