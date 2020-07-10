@@ -19,6 +19,10 @@ import scala.util.{Random, Try}
 @JSExportTopLevel("ScalaJSFrontEnd")
 object ScalaJSFrontEnd {
 
+  val dnbAudioPackLocalStorageKey = "dnbAudioPack"
+  val audioPackNames = List("Gedgaudas", "Sarkar")
+  val defaultAudioPack = "Gedgaudas"
+
   @JSExport
   def main(target: html.Div): Unit = {
     println("ScalaJSFrontEnd Initialized")
@@ -103,6 +107,7 @@ object ScalaJSFrontEnd {
           ).render
         )
         appendNBackLevelSubmitBox(target)
+        appendAudioPackButtons(target)
         val linkColor = "#CA6754" // could also be #BA9B63 or #C1542E
         target.appendChild(
           div(
@@ -116,7 +121,7 @@ object ScalaJSFrontEnd {
               " on GitHub."
             ),
             p(
-              "The sound files of letters of the alphabet are credited to Amy Gedgaudas and were distributed by Tim Kahn " +
+              "The Gedgaudas sound pack of letters of the alphabet are credited to Amy Gedgaudas and were distributed by Tim Kahn " +
               "on ", a(href:="https://freesound.org/people/tim.kahn/packs/4371/",rel:="noopener",color:=linkColor)("freesound"), " under ",
                 a(href:="https://creativecommons.org/licenses/by/3.0/",rel:="noopener",color:=linkColor)("CC BY 3.0"), "."
             )
@@ -174,6 +179,27 @@ object ScalaJSFrontEnd {
     startButton.onclick = (e: MouseEvent) => redirectToGame()
   }
 
+  private def appendAudioPackButtons(target: Div): Unit = {
+    val selectedAudioPack = getSelectedDnbAudioPackFromLocalStorage()
+
+    val audioPackRadioButtons =
+      audioPackNames.map(packName => packName ->
+        span(
+          onclick := ((e: MouseEvent) => dom.window.localStorage.setItem(dnbAudioPackLocalStorageKey, packName)),
+          input(id := "audioPack" + packName, `type` := "radio", name := "audioPack", value := packName,
+            if (packName == selectedAudioPack) checked else placeholder := ""),
+          label(`for` := "audioPack" + packName, packName)
+        )
+      )
+    target.appendChild(
+      div(
+        p(
+          "Sound pack:", span(audioPackRadioButtons.map(_._2): _*)
+        )
+      ).render
+    )
+  }
+
   def renderStimuli(
     stimuli: List[Stimulus],
     idx: Int,
@@ -188,7 +214,8 @@ object ScalaJSFrontEnd {
   ): Unit = {
     if (stimuli.nonEmpty) {
       renderVisual(gameCanvas, renderer, stimuli.head.visual)
-      playSound("audio/" + stimuli.head.audio + ".wav", audioContext)
+      val selectedAudioPack = getSelectedDnbAudioPackFromLocalStorage()
+      playSound("audio/" + selectedAudioPack + "/" + stimuli.head.audio + ".wav", audioContext)
       gameCanvas.style.outline = "none"
       gameCanvas.tabIndex = 1000
       gameCanvas.focus()
@@ -223,6 +250,11 @@ object ScalaJSFrontEnd {
         s"&audioMistakes=${audioMistakesCount}"
     }
   }
+
+  def getSelectedDnbAudioPackFromLocalStorage(): String =
+    Option(dom.window.localStorage.getItem(dnbAudioPackLocalStorageKey))
+      .filter(audioPackNames.contains)
+      .getOrElse(defaultAudioPack)
 
   def playSound(url: String, audioContext: AudioContext): Unit = {
     val source = audioContext.createBufferSource()
